@@ -68,9 +68,10 @@ namespace UDPAsynchronousChat
         {
             OnRaiseTextUpdateEvent(new TextUpdateEventArgs(
                 $"Data({e.Count} bytes) sent to {e.RemoteEndPoint.ToString()}"));
-            if(Encoding.ASCII.GetString(e.Buffer, 0, e.BytesTransferred).Equals("<confirm>"))
+            if(Encoding.ASCII.GetString(e.Buffer, 0, e.BytesTransferred).Equals("<discover>"))
+            {
                 ReceiveTextFromServer(expectedValue: "<confirm>", IPEPReceiverLocal: IPEPLocal);
-
+            }
         }
 
         private void ReceiveTextFromServer(string expectedValue, IPEndPoint IPEPReceiverLocal)
@@ -93,19 +94,56 @@ namespace UDPAsynchronousChat
         {
             if(e.BytesTransferred == 0) return;
             string receivedText = Encoding.ASCII.GetString(e.Buffer, 0, e.BytesTransferred);
-
-            if(receivedText.Equals(Convert.ToString(e.UserToken)))
+            string UserTokenString = Convert.ToString(e.UserToken);
+            if (receivedText.Equals(UserTokenString))
             {
                 OnRaiseTextUpdateEvent(new TextUpdateEventArgs(
                     $"Received confirmation from server"));
                 mChatServerEP = e.RemoteEndPoint;
-                ReceiveTextFromServer(string.Empty, mChatServerEP as IPEndPoint);
+
+            }
+            else if(string.IsNullOrEmpty(UserTokenString) && !string.IsNullOrEmpty(receivedText))
+            {
+                OnRaiseTextUpdateEvent(new TextUpdateEventArgs(receivedText));
             }
             else
             {
                 OnRaiseTextUpdateEvent(new TextUpdateEventArgs(
-                    $"Received unexpected usertoken: {receivedText}"));
+                    $"Received unexpected usertoken: {receivedText} with usertoken {UserTokenString}"));
             }
+            ReceiveTextFromServer(string.Empty, mChatServerEP as IPEndPoint);
+        }
+
+        public void SendMessageToKnownServer(string message)
+        {
+            try
+            {
+                if(string.IsNullOrEmpty(message))
+                {
+                    return;
+                }
+
+                Byte[] bytesToSend = Encoding.ASCII.GetBytes(message);
+                SocketAsyncEventArgs saea = new SocketAsyncEventArgs();
+                saea.SetBuffer(bytesToSend, 0, bytesToSend.Length);
+                saea.RemoteEndPoint = mChatServerEP;
+
+                saea.UserToken = message;
+
+                saea.Completed += SendMessageToKnownServerCompletedCallback;
+
+                mBroadcastSender.SendToAsync(saea);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+               
+            }
+        }
+
+        private void SendMessageToKnownServerCompletedCallback(object sender, SocketAsyncEventArgs e)
+        {
+            Console.WriteLine($"Sent: {e.UserToken} Server: {e.RemoteEndPoint}");
         }
     }
 }

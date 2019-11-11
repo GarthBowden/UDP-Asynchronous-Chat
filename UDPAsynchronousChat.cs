@@ -89,6 +89,16 @@ namespace UDPAsynchronousChat
                 SendTextToEndPoint("<confirm>", e.RemoteEndPoint);
 
             }
+            else
+            {
+                foreach(IPEndPoint remEP in ClientList)
+                {
+                    if (!remEP.Equals(e.RemoteEndPoint))
+                    {
+                        SendTextToEndPoint(textReceived, remEP);
+                    }
+                }
+            }
             StartReceivingData();
         }
 
